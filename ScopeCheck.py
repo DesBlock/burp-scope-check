@@ -75,8 +75,8 @@ class BurpExtender(IBurpExtender, ITab):
     #Create Description
     self.descriptionLabel = JLabel("Add all IPs or Domains that SHOULD be in scope for testing below.")
     self.descriptionLabel.setFont(Font('Tahoma', Font.PLAIN, 13))
-    self.descriptionLabel.setForeground(Color(255,255,255))
-    self.descriptionLabel.setLayout(BoxLayout(self.descriptionLabel, BoxLayout.X_AXIS))
+    #self.descriptionLabel.setForeground(Color(255,255,255))
+    #self.descriptionLabel.setLayout(BoxLayout(self.descriptionLabel, BoxLayout.X_AXIS))
 
     #Create Input Pane
     self.inputResultsPane = JSplitPane(JSplitPane.HORIZONTAL_SPLIT)  
@@ -137,7 +137,7 @@ class BurpExtender(IBurpExtender, ITab):
     self.inputResultsPane.setRightComponent(self.InputButtonPanel)
 
     #Create Separation Bar (to make things pretty)
-    self.bar = JSeparator(SwingConstants.HORIZONTAL)
+    #self.bar = JSeparator(SwingConstants.HORIZONTAL)
 
 
     #Set the layout
@@ -147,39 +147,31 @@ class BurpExtender(IBurpExtender, ITab):
     layout.setAutoCreateGaps(True)
     layout.setAutoCreateContainerGaps(True)
 
-    # layout.setHorizontalGroup(
-    #   layout.createParallelyGrou
-    # )
-
-
     layout.setHorizontalGroup(
       layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-      .addGroup(layout.createSequentialGroup()
-          .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-              .addComponent(self.inScopeLabel)
-              .addComponent(self.descriptionLabel)
-              .addComponent(self.bar))
+      .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+          .addComponent(self.inScopeLabel)
+          .addComponent(self.descriptionLabel))
+      #.addComponent(self.bar)
+      #.addGap(10,10,10)
       .addGroup(layout.createSequentialGroup()
           .addComponent(self.inputPane))
       .addGroup(layout.createSequentialGroup()
-          .addComponent(self.inputResultsPane))))
+          .addComponent(self.inputResultsPane)))
 
     layout.setVerticalGroup(
       layout.createSequentialGroup()
-          .addComponent(self.inScopeLabel)
-          .addComponent(self.descriptionLabel)
-          .addGap(10,10,10)
       .addGroup(layout.createSequentialGroup()
-          .addComponent(self.inputPane)
-          .addGap(10,10,10))
+          .addComponent(self.inScopeLabel)
+          .addComponent(self.descriptionLabel))
+      #.addComponent(self.bar)
+      #.addGap(10,10,10)
+      .addGroup(layout.createSequentialGroup()
+          .addComponent(self.inputPane))
       .addGroup(layout.createSequentialGroup()
           .addComponent(self.inputResultsPane)
           .addContainerGap(26, lang.Short.MAX_VALUE)))
 
-
-    #self.inScope.addComponent(self.inScopeLabel)
-    #self.inScope.insertSeparator()
-    #self.inScope.addComponent(self.descriptionLabel)
 
     #TODO: Duplicate above with different layout and content.
     self.scopeLoad = JPanel(GridBagLayout())
