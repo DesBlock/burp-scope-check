@@ -17,6 +17,8 @@ from javax.swing import DefaultListModel
 from javax.swing import JList
 from javax.swing import JScrollPane
 from javax.swing import JFileChooser
+from javax.swing import ListCellRenderer
+from javax.swing import DefaultListCellRenderer
 from javax.swing.border import EmptyBorder
 from java.awt import Dimension
 from java.awt import GridBagLayout
@@ -24,6 +26,12 @@ from java.awt import Font
 from java.awt import Color
 from urlparse import urlparse
 import java.lang as lang
+from ipaddress import ip_address
+import time
+from socket import gethostbyaddr
+from socket import getaddrinfo
+from socket import gethostbyname
+
 
 '''
 References/Credit:
@@ -38,7 +46,7 @@ References/Credit:
 
 NAME = 'Scope Check'
 VERSION = '0.1'
-DEBUG = False
+# DEBUG = False
 
 
 class BurpExtender(IBurpExtender, ITab):
@@ -67,10 +75,13 @@ class BurpExtender(IBurpExtender, ITab):
         self.stderr = PrintWriter(callbacks.getStderr(), True)
 
         # write a message to our output stream
-        #stdout.println("Hello output")
+        #self.stdout.println("Hello output")
 
         # write a message to our error stream
-        #stderr.println("Hello errors")
+        #self.stderr.println("Hello errors")
+
+        # Debug: unload extension as failsafe to prevent lockup
+        # callbacks.unloadExtension()
 
         # write a message to the Burp alerts tab
         callbacks.issueAlert("Successfully Loaded")
@@ -104,7 +115,7 @@ class BurpExtender(IBurpExtender, ITab):
         # Create List Results from Analysis.
         self.urlResultsModel = DefaultListModel()
         self.urlResults = JList(self.urlResultsModel)
-        self.urlResultsPane = JScrollPane(self.urlList)
+        self.urlResultsPane = JScrollPane(self.urlResults)
         self.urlResultsPane.setMaximumSize(Dimension(300, 400))
 
         # Create Input Buttons and set default size
@@ -170,7 +181,7 @@ class BurpExtender(IBurpExtender, ITab):
         layout.linkSize(SwingConstants.HORIZONTAL, self.InputAdd,
                         self.InputClear, self.InputLoad, self.InputRemove)
         layout.linkSize(SwingConstants.HORIZONTAL,
-                        self.inScopeInput, self.urlListPane)
+                        self.inScopeInput, self.urlListPane, self.urlResultsPane)
 
         # TODO: Duplicate above with different layout and content.
         self.scopeLoad = JPanel(GridBagLayout())
@@ -182,27 +193,27 @@ class BurpExtender(IBurpExtender, ITab):
     def getSiteMap(self):
         siteMapURLs = {}
         for entry in self._callbacks.getSiteMap(None):
-          request = self.helpers.analyzeRequest(entry)
-          url = request.getUrl()
-          try:
-            decodeUrl = self.helpers.urlDecode(str(url))
-          except Exception as e:
-            continue
-          #Utilize if Port is important
-          #hostname = urlparse(decodeUrl).netloc
-          hostname = urlparse(decodeUrl).hostname 
-          if hostname not in siteMapURLs:
-            siteMapURLs[hostname] = url
+            request = self.helpers.analyzeRequest(entry)
+            url = request.getUrl()
+            try:
+                decodeUrl = self.helpers.urlDecode(str(url))
+            except Exception as e:
+                continue
+            # Utilize if Port is important
+            #hostname = urlparse(decodeUrl).netloc
+            hostname = urlparse(decodeUrl).hostname
+            if hostname not in siteMapURLs:
+                siteMapURLs[hostname] = url
         return siteMapURLs
 
     # Get all currently loaded urls/IPs.
-    def getCurrentlyLoaded(self):
-        model = self.urlList.getModel()
-        current = []
+    def getCurrentlyLoaded(self, loadedlist):
+        model = loadedlist.getModel()
+        loaded = []
         # Model object is not iterable so we have to manually iterate through the list.
         for i in range(0, model.getSize()):
-            current.append(model.getElementAt(i))
-        return current
+            loaded.append(model.getElementAt(i))
+        return loaded
 
     def entryAdd(self, e):
         source = e.getSource()
@@ -210,13 +221,14 @@ class BurpExtender(IBurpExtender, ITab):
         # Check for blank text and exit function if input is none.
         if inputText == '':
             return
-        currentlyLoaded = self.getCurrentlyLoaded()
-        currentlyLoaded.append(inputText)
+        resolved_text = self.resolve(inputText)
+        currentlyLoaded = self.getCurrentlyLoaded(self.urlList)
+        currentlyLoaded.append(resolved_text)
         self.urlList.setListData(currentlyLoaded)
 
     def entryRemove(self, e):
         indices = self.urlList.getSelectedIndices().tolist()
-        current = self.getCurrentlyLoaded()
+        current = self.getCurrentlyLoaded(self.urlList)
 
         for index in reversed(indices):
             del current[index]
@@ -230,6 +242,7 @@ class BurpExtender(IBurpExtender, ITab):
         if ret == JFileChooser.APPROVE_OPTION:
             file = chooseFile.getSelectedFile()
             filename = file.getCanonicalPath()
+            resolved_text = []
             try:
                 f = open(filename, "r")
                 text = f.readlines()
@@ -237,7 +250,9 @@ class BurpExtender(IBurpExtender, ITab):
                 if text:
                     text = [line for line in text if not line.isspace()]
                     text = [line.rstrip('\n') for line in text]
-                    self.urlList.setListData(text)
+                    for line in text:
+                        resolved_text.append(self.resolve(text))
+                    self.urlList.setListData(resolved_text)
             except IOError as e:
                 self.stderr.println("Error reading file.\n", str(e))
 
@@ -245,6 +260,33 @@ class BurpExtender(IBurpExtender, ITab):
     def entryClear(self, e):
         emptyArray = []
         self.urlList.setListData(emptyArray)
+
+    # Attempts to resolve IP to Hostname and Hostname to IP. Appends [IP/Hostname]
+    # to the end of entry. e.g. 125.2.48.2 [testing.com]
+    def resolve(self, text):
+        try:
+            # Test if valid IP
+            ip = ip_address(text)
+            try:
+                domain_name = gethostbyaddr(ip)[0]
+            except OSError as e:
+                return ip
+            return text + " [" + domain_name + "]"
+        except ValueError as e:
+            # Not an IP, check to see if valid hostname
+            try:
+                # Currently gethostbyname only supports IPv4, if IPv6 is need use either
+                # of the options below
+                # ip = getaddrinfo(text, 80)
+                # ip = getaddrinfo(text, 444)
+
+                # Resolve IP Address
+                # NOTE: Only resolves a single IP, not multiple.
+                ip = gethostbyname(text)
+                return text + " [" + ip + "]"
+            except OSError as e:
+                # Unable to resolve hostname to IP. Just returning text
+                return text
 
     # Function to analyze URLlist entries against target sitemap.
 
@@ -255,20 +297,51 @@ class BurpExtender(IBurpExtender, ITab):
         inSuiteScope = []
         # Filter the sitemap to include on those that match the suite-scope
         for site in iter(siteMap):
-            
+
             if self._callbacks.isInScope(siteMap[site]):
-                #Only Appending 1???
                 inSuiteScope.append(site)
-        # Set filtered list of inScope results to results pane BEFORE coloring.(Just in case there are errors you can see where)
-        self.stdout.format("SuiteScope: %s", inSuiteScope)
         self.urlResults.setListData(inSuiteScope)
-        # Check if items in filtered sitemap match uploaded scope. Resolve Names to IPs as neccesary.
-        '''
+        userscope = self.getCurrentlyLoaded(self.urlList)
+
+        self.urlResults.setCellRenderer(ResultScopeCellRenderer(
+            userscope, self.stdout, self.stderr))
+        # time.sleep(5)
+        # self._callbacks.unloadExtension()
+
+        # Check if items in filtered sitemap match uploaded scope. Resolve Names to IPs as
+        # neccesary.
+    '''
     - Check if Site domain is in scopeList
     - Resolve subdomain to IP
     - Resolve tld domain to IP
-    - Resolve CIDR notation and ranges to individual IPs OR identify ways to check if Site IP is in CIDR range.
+    - Resolve CIDR notation and ranges to individual IPs OR identify ways to check if Site
+        IP is in CIDR range.
     - Check IP in scopeList
     - Take SiteMap list and output to Results Pane
     - Color inScope IPs/Names based off scoping.
     '''
+
+
+class ResultScopeCellRenderer(ListCellRenderer):
+    # Iniitialize external variables, stdout and stderr for printing to burp outputs.
+    def __init__(self, userscope, stdout=None, stderr=None):
+        self._userscope = userscope
+        self._stdout = stdout
+        self._stderr = stderr
+
+        # Create JLabel to be returned and set within JList.
+        self.results = JLabel(horizontalAlignment=SwingConstants.LEFT)
+
+    # Function used to accept each list component and set specific values.
+    # Dynamically called by swing to paint each cell component.
+    def getListCellRendererComponent(self, list, value, index, isSelected, cellHasFocus):
+        if value in self._userscope:
+            self.results.setBackground(Color.GREEN)
+        else:
+            self.results.setBackground(Color.RED)
+        self.results.setText(value)
+        # Manually set foreground color to prevent readability issues when using dark mode.
+        self.results.setForeground(Color.BLACK)
+        self.results.setEnabled(list.isEnabled())
+        self.results.setOpaque(True)
+        return self.results
