@@ -27,6 +27,8 @@ from java.awt import Color
 from urlparse import urlparse
 import java.lang as lang
 from ipaddress import ip_address
+from ipaddress import ip_network
+
 import time
 from socket import gethostbyaddr
 from socket import getaddrinfo
@@ -35,35 +37,38 @@ from socket import gethostbyname
 
 '''
 References/Credit:
-  General Code: 
+  General Code:
     https://github.com/PortSwigger/additional-csrf-checks/blob/master/EasyCSRF.py
     https://portswigger.net/burp/extender#SampleExtensions
-  Formatting: 
+  Formatting:
     https://github.com/PortSwigger/site-map-extractor/blob/master/site_map_extractor.py
     https://github.com/SmeegeSec/Burp-Importer/
     https://github.com/Dionach/HeadersAnalyzer/
 '''
 
 NAME = 'Scope Check'
-VERSION = '0.1'
+VERSION = '1.0'
 # DEBUG = False
 
 
 class BurpExtender(IBurpExtender, ITab):
+    # pylint: disable-next=invalid-name
     def getTabCaption(self):
         return NAME
 
+    # pylint: disable-next=invalid-name
     def getUiComponent(self):
         return self.tabs
 
+    # pylint: disable-next=invalid-name
     def registerExtenderCallbacks(self, callbacks):
 
         # Create a class level instance of callbacks to be used.
-        self._callbacks = callbacks
+        self.callbacks = callbacks
         self.helpers = callbacks.getHelpers()
 
         # Draw the gui
-        self.drawUI()
+        self.draw_ui()
 
         # Register callbacks for name and tab creation.
         callbacks.setExtensionName(NAME)
@@ -86,54 +91,56 @@ class BurpExtender(IBurpExtender, ITab):
         # write a message to the Burp alerts tab
         callbacks.issueAlert("Successfully Loaded")
 
-    def drawUI(self):
+    def draw_ui(self):
 
         # InScope Tab
-        self.inScope = JPanel()
+        self.in_scope = JPanel()
 
         # Create Title Label
-        self.inScopeLabel = JLabel("InScope Addresses:")
-        self.inScopeLabel.setFont(Font('Tahoma', Font.BOLD, 14))
-        self.inScopeLabel.setForeground(Color(235, 136, 0))
+        self.in_scope_label = JLabel("InScope Addresses:")
+        self.in_scope_label.setFont(Font('Tahoma', Font.BOLD, 14))
+        self.in_scope_label.setForeground(Color(235, 136, 0))
 
         # Create Description
-        self.descriptionLabel = JLabel(
-            "Add all IPs or Domains that SHOULD be in scope for testing below. Currently only CIDR notation, individual IPs, and domains are supported.")
-        self.descriptionLabel.setFont(Font('Tahoma', Font.PLAIN, 13))
-        # self.descriptionLabel.setForeground(Color(255,255,255))
+        self.description_label = JLabel(
+            "Add all IPs or Domains that SHOULD be in scope for testing below. "+
+            "Currently only CIDR notation, individual IPs, and domains are supported.")
+        self.description_label.setFont(Font('Tahoma', Font.PLAIN, 13))
+        # self.description_label.setForeground(Color(255,255,255))
 
         # Create Input Field
-        self.inScopeInput = JTextField("Sample Input")
-        self.inScopeInput.setMaximumSize(Dimension(300, 10))
+        self.in_scope_input = JTextField("Sample Input")
+        self.in_scope_input.setMaximumSize(Dimension(300, 10))
 
         # Create List of Loaded URLs.
-        self.urlListModel = DefaultListModel()
-        self.urlList = JList(self.urlListModel)
-        self.urlListPane = JScrollPane(self.urlList)
-        self.urlListPane.setMaximumSize(Dimension(300, 400))
+        self.url_list_model = DefaultListModel()
+        self.url_list = JList(self.url_list_model)
+        self.url_list_pane = JScrollPane(self.url_list)
+        self.url_list_pane.setMaximumSize(Dimension(300, 400))
 
         # Create List Results from Analysis.
-        self.urlResultsModel = DefaultListModel()
-        self.urlResults = JList(self.urlResultsModel)
-        self.urlResultsPane = JScrollPane(self.urlResults)
-        self.urlResultsPane.setMaximumSize(Dimension(300, 400))
+        self.url_results_model = DefaultListModel()
+        self.url_results = JList(self.url_results_model)
+        self.url_results_pane = JScrollPane(self.url_results)
+        self.url_results_pane.setMaximumSize(Dimension(300, 400))
 
         # Create Input Buttons and set default size
-        self.InputAdd = JButton('Add', actionPerformed=self.entryAdd)
-        self.InputRemove = JButton('Remove', actionPerformed=self.entryRemove)
-        self.InputLoad = JButton('Load', actionPerformed=self.entryLoad)
-        self.InputClear = JButton('Clear', actionPerformed=self.entryClear)
-        self.Analyze = JButton('Analyze', actionPerformed=self.analyze)
-        self.Analyze.setForeground(Color.BLACK)
-        self.Analyze.setBackground(Color.GREEN)
-        self.Analyze.setOpaque(True)
+        self.input_add = JButton('Add', actionPerformed=self.entry_add)
+        self.input_remove = JButton(
+            'Remove', actionPerformed=self.entry_remove)
+        self.input_load = JButton('Load', actionPerformed=self.entry_load)
+        self.input_clear = JButton('Clear', actionPerformed=self.entry_clear)
+        self.analyze = JButton('Analyze', actionPerformed=self.analyze_urls)
+        self.analyze.setForeground(Color.BLACK)
+        self.analyze.setBackground(Color.GREEN)
+        self.analyze.setOpaque(True)
 
         # Create Separation Bar (to make things pretty)
         #self.bar = JSeparator(SwingConstants.HORIZONTAL)
 
         # Set the layout
-        layout = GroupLayout(self.inScope)
-        self.inScope.setLayout(layout)
+        layout = GroupLayout(self.in_scope)
+        self.in_scope.setLayout(layout)
 
         layout.setAutoCreateGaps(True)
         layout.setAutoCreateContainerGaps(True)
@@ -141,73 +148,75 @@ class BurpExtender(IBurpExtender, ITab):
         layout.setHorizontalGroup(
             layout.createParallelGroup(GroupLayout.Alignment.LEADING)
             .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-                      .addComponent(self.inScopeLabel)
-                      .addComponent(self.descriptionLabel))
+                      .addComponent(self.in_scope_label)
+                      .addComponent(self.description_label))
             # .addComponent(self.bar)
             # .addGap(10,10,10)
             .addGroup(layout.createSequentialGroup()
-                      .addComponent(self.InputAdd)
-                      .addComponent(self.inScopeInput))
+                      .addComponent(self.input_add)
+                      .addComponent(self.in_scope_input))
             # .addGap(100)
             .addGroup(layout.createSequentialGroup()
                       .addGroup(layout.createParallelGroup()
-                                .addComponent(self.InputClear)
-                                .addComponent(self.InputLoad)
-                                .addComponent(self.InputRemove)
-                                .addComponent(self.Analyze))
-                      .addComponent(self.urlListPane, 0, 500, 1000)
-                      .addComponent(self.urlResultsPane, 0, 500, 1000)))
+                                .addComponent(self.input_clear)
+                                .addComponent(self.input_load)
+                                .addComponent(self.input_remove)
+                                .addComponent(self.analyze))
+                      .addComponent(self.url_list_pane, 0, 500, 1000)
+                      .addComponent(self.url_results_pane, 0, 500, 1000)))
 
         layout.setVerticalGroup(
             layout.createSequentialGroup()
             .addGroup(layout.createSequentialGroup()
-                      .addComponent(self.inScopeLabel)
-                      .addComponent(self.descriptionLabel))
+                      .addComponent(self.in_scope_label)
+                      .addComponent(self.description_label))
             # .addComponent(self.bar)
             # .addGap(10,10,10)
             .addGroup(layout.createParallelGroup()
-                      .addComponent(self.InputAdd)
-                      .addComponent(self.inScopeInput))
+                      .addComponent(self.input_add)
+                      .addComponent(self.in_scope_input))
             .addGroup(layout.createParallelGroup()
                       .addGroup(layout.createSequentialGroup()
-                                .addComponent(self.InputClear)
-                                .addComponent(self.InputLoad)
-                                .addComponent(self.InputRemove)
-                                .addComponent(self.Analyze))
-                      .addComponent(self.urlListPane, 0, 500, 1000)
-                      .addComponent(self.urlResultsPane, 0, 500, 1000))
+                                .addComponent(self.input_clear)
+                                .addComponent(self.input_load)
+                                .addComponent(self.input_remove)
+                                .addComponent(self.analyze))
+                      .addComponent(self.url_list_pane, 0, 500, 1000)
+                      .addComponent(self.url_results_pane, 0, 500, 1000))
             .addContainerGap(50, lang.Short.MAX_VALUE))
 
-        layout.linkSize(SwingConstants.HORIZONTAL, self.InputAdd,
-                        self.InputClear, self.InputLoad, self.InputRemove)
+        layout.linkSize(SwingConstants.HORIZONTAL, self.input_add,
+                        self.input_clear, self.input_load, self.input_remove)
         layout.linkSize(SwingConstants.HORIZONTAL,
-                        self.inScopeInput, self.urlListPane, self.urlResultsPane)
+                        self.in_scope_input, self.url_list_pane, self.url_results_pane)
 
-        # TODO: Duplicate above with different layout and content.
-        self.scopeLoad = JPanel(GridBagLayout())
+        self.scope_load = JPanel(GridBagLayout())
         self.tabs = JTabbedPane()
-        self.tabs.addTab('In-Scope', self.inScope)
-        self.tabs.addTab('Scope Load', self.scopeLoad)
+        self.tabs.addTab('In-Scope', self.in_scope)
 
-    # Return entire sitemap
-    def getSiteMap(self):
-        siteMapURLs = {}
-        for entry in self._callbacks.getSiteMap(None):
+        # TODO: Create Scope Load tab to automatically curl all IPs and Domains from user provided
+        # scope to automate the process of analyzing a large number of domains or IPs.
+        # self.tabs.addTab('Scope Load', self.scope_load)
+
+    # Return entire site_map
+    def get_site_map(self):
+        site_map_urls = {}
+        for entry in self.callbacks.getSiteMap(None):
             request = self.helpers.analyzeRequest(entry)
             url = request.getUrl()
             try:
-                decodeUrl = self.helpers.urlDecode(str(url))
+                decoded_url = self.helpers.urlDecode(str(url))
             except Exception as e:
                 continue
             # Utilize if Port is important
-            #hostname = urlparse(decodeUrl).netloc
-            hostname = urlparse(decodeUrl).hostname
-            if hostname not in siteMapURLs:
-                siteMapURLs[hostname] = url
-        return siteMapURLs
+            #hostname = urlparse(decoded_url).netloc
+            hostname = urlparse(decoded_url).hostname
+            if hostname not in site_map_urls:
+                site_map_urls[hostname] = url
+        return site_map_urls
 
     # Get all currently loaded urls/IPs.
-    def getCurrentlyLoaded(self, loadedlist):
+    def get_currently_loaded(self, loadedlist):
         model = loadedlist.getModel()
         loaded = []
         # Model object is not iterable so we have to manually iterate through the list.
@@ -215,51 +224,53 @@ class BurpExtender(IBurpExtender, ITab):
             loaded.append(model.getElementAt(i))
         return loaded
 
-    def entryAdd(self, e):
+    def entry_add(self, e):
         source = e.getSource()
-        inputText = self.inScopeInput.getText()
+        input_text = self.in_scope_input.getText()
         # Check for blank text and exit function if input is none.
-        if inputText == '':
+        if input_text == '':
             return
-        resolved_text = self.resolve(inputText)
-        currentlyLoaded = self.getCurrentlyLoaded(self.urlList)
-        currentlyLoaded.append(resolved_text)
-        self.urlList.setListData(currentlyLoaded)
+        resolved_text = self.resolve(input_text)
+        currently_loaded = self.get_currently_loaded(self.url_list)
+        currently_loaded.append(resolved_text)
+        self.url_list.setListData(currently_loaded)
+        self.analyze_urls()
 
-    def entryRemove(self, e):
-        indices = self.urlList.getSelectedIndices().tolist()
-        current = self.getCurrentlyLoaded(self.urlList)
+    def entry_remove(self, e):
+        indices = self.url_list.getSelectedIndices().tolist()
+        current = self.get_currently_loaded(self.url_list)
 
         for index in reversed(indices):
             del current[index]
 
-        self.urlList.setListData(current)
+        self.url_list.setListData(current)
 
-    def entryLoad(self, e):
-        chooseFile = JFileChooser()
-        ret = chooseFile.showDialog(self.tabs, "Choose file")
+    def entry_load(self, e):
+        choose_file = JFileChooser()
+        ret = choose_file.showDialog(self.tabs, "Choose file")
 
         if ret == JFileChooser.APPROVE_OPTION:
-            file = chooseFile.getSelectedFile()
+            file = choose_file.getSelectedFile()
             filename = file.getCanonicalPath()
             resolved_text = []
             try:
-                f = open(filename, "r")
-                text = f.readlines()
+                with open(filename, "r") as open_file:
+                    text = open_file.readlines()
 
-                if text:
-                    text = [line for line in text if not line.isspace()]
-                    text = [line.rstrip('\n') for line in text]
-                    for line in text:
-                        resolved_text.append(self.resolve(text))
-                    self.urlList.setListData(resolved_text)
+                    if text:
+                        text = [line for line in text if not line.isspace()]
+                        text = [line.rstrip('\n') for line in text]
+                        for line in text:
+                            resolved_text.append(self.resolve(text))
+                        self.url_list.setListData(resolved_text)
             except IOError as e:
                 self.stderr.println("Error reading file.\n", str(e))
+            self.analyze_urls()
 
     # Set current list to an empty array to clear out loaded list.
-    def entryClear(self, e):
-        emptyArray = []
-        self.urlList.setListData(emptyArray)
+    def entry_clear(self, e):
+        empty_array = []
+        self.url_list.setListData(empty_array)
 
     # Attempts to resolve IP to Hostname and Hostname to IP. Appends [IP/Hostname]
     # to the end of entry. e.g. 125.2.48.2 [testing.com]
@@ -268,7 +279,8 @@ class BurpExtender(IBurpExtender, ITab):
             # Test if valid IP
             ip = ip_address(text)
             try:
-                domain_name = gethostbyaddr(ip)[0]
+                name = gethostbyaddr(text)
+                domain_name = name[0]
             except OSError as e:
                 return ip
             return text + " [" + domain_name + "]"
@@ -284,45 +296,33 @@ class BurpExtender(IBurpExtender, ITab):
                 # NOTE: Only resolves a single IP, not multiple.
                 ip = gethostbyname(text)
                 return text + " [" + ip + "]"
-            except OSError as e:
+            except Exception as e:
                 # Unable to resolve hostname to IP. Just returning text
                 return text
 
-    # Function to analyze URLlist entries against target sitemap.
+    # Function to analyze URLlist entries against target site_map.
+    def analyze_urls(self, e=None):
+        # Non-filtered site_map
+        site_map = self.get_site_map()
+        # Entire site_map filtered by suite-scope
+        in_suite_scope = []
+        # Filter the site_map to include on those that match the suite-scope
+        for site in iter(site_map):
 
-    def analyze(self, e):
-        # Non-filtered sitemap
-        siteMap = self.getSiteMap()
-        # Entire siteMap filtered by suite-scope
-        inSuiteScope = []
-        # Filter the sitemap to include on those that match the suite-scope
-        for site in iter(siteMap):
+            if self.callbacks.isInScope(site_map[site]):
+                in_suite_scope.append(self.resolve(site))
+        self.url_results.setListData(in_suite_scope)
+        # Scope loaded by user (non-suitescope)
+        userscope = self.get_currently_loaded(self.url_list)
 
-            if self._callbacks.isInScope(siteMap[site]):
-                inSuiteScope.append(site)
-        self.urlResults.setListData(inSuiteScope)
-        userscope = self.getCurrentlyLoaded(self.urlList)
-
-        self.urlResults.setCellRenderer(ResultScopeCellRenderer(
+        self.url_results.setCellRenderer(ResultScopeCellRenderer(
             userscope, self.stdout, self.stderr))
         # time.sleep(5)
-        # self._callbacks.unloadExtension()
-
-        # Check if items in filtered sitemap match uploaded scope. Resolve Names to IPs as
-        # neccesary.
-    '''
-    - Check if Site domain is in scopeList
-    - Resolve subdomain to IP
-    - Resolve tld domain to IP
-    - Resolve CIDR notation and ranges to individual IPs OR identify ways to check if Site
-        IP is in CIDR range.
-    - Check IP in scopeList
-    - Take SiteMap list and output to Results Pane
-    - Color inScope IPs/Names based off scoping.
-    '''
+        # self.callbacks.unloadExtension()
 
 
 class ResultScopeCellRenderer(ListCellRenderer):
+
     # Iniitialize external variables, stdout and stderr for printing to burp outputs.
     def __init__(self, userscope, stdout=None, stderr=None):
         self._userscope = userscope
@@ -334,14 +334,55 @@ class ResultScopeCellRenderer(ListCellRenderer):
 
     # Function used to accept each list component and set specific values.
     # Dynamically called by swing to paint each cell component.
-    def getListCellRendererComponent(self, list, value, index, isSelected, cellHasFocus):
-        if value in self._userscope:
-            self.results.setBackground(Color.GREEN)
-        else:
-            self.results.setBackground(Color.RED)
+    def getListCellRendererComponent(self, Jlist, value, index, isSelected, cellHasFocus):
+        # Default set background to Red, if in-scope will be set to Green later.
+        self.results.setBackground(Color.RED)
+        # Attempt to seperate JList value into two parts (hostname and ip)
+        split_value = value.split('[', 1)
+        initial_value = split_value[0]
+        try:
+            secondary_value = split_value[1][0:-1]
+        except IndexError as e:
+            secondary_value = ""
+
+        for user_val in self._userscope:
+            # Check if cidr range was provided.
+            if "/" in user_val:
+                try:
+                    cidr_range = ip_network(str(user_val).decode('utf8'))
+                    try:
+                        ip = ip_address(initial_value)
+                        if ip in cidr_range:
+                            self.results.setBackground(Color.GREEN)
+                    except Exception as e:
+                        try:
+                            ip = ip_address(secondary_value)
+                            if ip in cidr_range:
+                                self.results.setBackground(Color.GREEN)
+                        except Exception as e:
+                            pass
+                except Exception as e:
+                    self._stderr.printf(
+                        "Invalid CIDR range provided: %s\n", user_val)
+                    self._stderr.printf("Error: %s\n", e)
+            # If CIDR value was not provided check for hostname/ip combo
+            user_split_value = user_val.split('[', 1)
+            user_initial_value = user_split_value[0]
+            try:
+                user_secondary_value = user_split_value[1][0:-1]
+            except IndexError as e:
+                user_secondary_value = ""
+
+            # Compare current JList value to user supplied values. Mark row Green if found
+            # Mark as Red if not found.
+            if initial_value == user_initial_value or initial_value == user_secondary_value:
+                self.results.setBackground(Color.GREEN)
+            if secondary_value == user_initial_value or secondary_value == user_secondary_value:
+                self.results.setBackground(Color.GREEN)
+
         self.results.setText(value)
         # Manually set foreground color to prevent readability issues when using dark mode.
         self.results.setForeground(Color.BLACK)
-        self.results.setEnabled(list.isEnabled())
+        self.results.setEnabled(Jlist.isEnabled())
         self.results.setOpaque(True)
         return self.results
