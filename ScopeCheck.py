@@ -190,7 +190,7 @@ class BurpExtender(IBurpExtender, ITab):
         layout.linkSize(SwingConstants.HORIZONTAL,
                         self.in_scope_input, self.url_list_pane, self.url_results_pane)
 
-        self.scope_load = JPanel(GridBagLayout())
+        # self.scope_load = JPanel(GridBagLayout())
         self.tabs = JTabbedPane()
         self.tabs.addTab('In-Scope', self.in_scope)
 
